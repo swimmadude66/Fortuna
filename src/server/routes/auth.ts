@@ -1,9 +1,10 @@
 import {Router} from 'express';
 import {createHash} from 'crypto';
 import * as uuid from 'uuid/v4';
-import {Observable} from 'rxjs';
-import {flatMap, switchMap} from 'rxjs/operators';
+import {Observable, throwError} from 'rxjs';
+import {flatMap, switchMap, map} from 'rxjs/operators';
 import {Config} from '../models/config';
+import {AuthService} from '../services/auth';
 
 const COOKIE_OPTIONS = {
     path: '/',
@@ -16,6 +17,7 @@ module.exports = (APP_CONFIG: Config) => {
     const router = Router();
     const db = APP_CONFIG.db;
     const sessionManager = APP_CONFIG.sessionManager;
+    const authService = new AuthService();
 
     router.post('/signup', (req, res) => {
         const body = req.body;
@@ -23,15 +25,17 @@ module.exports = (APP_CONFIG: Config) => {
             return res.status(400).send('Email and Password are required fields');
         } else {
             const salt = uuid().replace(/-/ig, '');
-            const passHash = createHash('sha512').update(`${salt}|${body.Password}`).digest('hex');
-            db.query('Insert into `users` (`Email`, `Salt`, `PassHash`, `Active`) VALUES(?, ?, ?, 1);', [body.Email, salt, passHash])
+            authService.hashPassword(`${salt}|${body.Password}`)
             .pipe(
-                flatMap(result => sessionManager.createSession(result.insertId, JSON.stringify(res.useragent)))
+                map(result => result.hash),
+                switchMap(hash => db.query('Insert into `users` (`Email`, `Salt`, `PassHash`, `Active`) VALUES(?, ?, ?, 1);', [body.Email, salt, hash])),
+                // catchError(detect 400 or 500 here)
+                switchMap(result => sessionManager.createSession(result.insertId, JSON.stringify(res.useragent)))
             )
             .subscribe(
                 result => {
                     res.cookie(APP_CONFIG.cookie_name, result.SessionKey, {...COOKIE_OPTIONS, expires: new Date(result.Expires * 1000), secure: req.secure});
-                    return res.send();
+                    return res.status(204).send();
                 },
                 err => {
                     console.error(err);
@@ -48,19 +52,23 @@ module.exports = (APP_CONFIG: Config) => {
         } else {
             db.query('Select `PassHash`, `UserId`, `Salt` from `users` where `Active`=1 AND `Email`=? LIMIT 1;', [body.Email])
             .pipe(
-                switchMap(
-                    (users: any[]) => {
-                        let user = {UserId: -100, PassHash: '12345', Salt: '12345'}; // use a fake user which will fail to avoid timing differences indicating existence of real users.
-                        if (users.length > 0) {
-                            user = users[0]
-                        }
-                        const compHash = createHash('sha512').update(`${user.Salt}|${body.Password}`).digest('hex');
-                        if (compHash === user.PassHash) {
-                            return sessionManager.createSession(user.UserId, JSON.stringify(res.useragent));
-                        } else {
-                            return Observable.throw('Incorrect username or password');
-                        }
+                map((users: any[]) => {
+                    let user = {UserId: -100, Email: 'fakeUser', PassHash: '12345', Salt: '12345', Active: true}; // use a fake user which will fail to avoid timing differences indicating existence of real users.
+                    if (users.length > 0) {
+                        user = users[0]
                     }
+                    return user;
+                }),
+                switchMap(user => authService.validatePassword(user, body.Password)
+                    .pipe(
+                        switchMap(isValid => {
+                            if (isValid) {
+                                return sessionManager.createSession(user.UserId, JSON.stringify(res.useragent));
+                            } else {
+                                return throwError('Incorrect username or password');
+                            }
+                        })
+                    )
                 )
             ).subscribe(
                 result => {

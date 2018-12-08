@@ -13,3 +13,12 @@ export interface SessionInfo {
     Created?: Date;
     LastAccessed?: Date;
 }
+
+export interface User {
+    UserId: number;
+    Email: string;
+    PassHash?: string;
+    Salt?: string
+    Confirm?: string;
+    Active: boolean | 0 | 1;
+}
