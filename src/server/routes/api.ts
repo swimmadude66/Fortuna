@@ -20,7 +20,8 @@ module.exports = (APP_CONFIG: Config) => {
         .pipe(
             tap(result => {
                 if (result && result.SessionKey) {
-                    sessionManager.updateAccess(result.SessionKey).subscribe(_ => _, err=> console.error(err));
+                    sessionManager.updateAccess(result.SessionKey)
+                    .subscribe(_ => _, err=> console.error(err));
                 }
             })
         )

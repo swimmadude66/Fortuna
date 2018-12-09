@@ -1,6 +1,7 @@
-import {Observable, throwError, observable} from 'rxjs';
 import {createPool, PoolConfig, Pool, Connection, escape as mysqlEscape} from 'mysql';
+import {Observable, throwError, of} from 'rxjs';
 import {switchMap, catchError} from 'rxjs/operators';
+import {DBResponse} from '../models/db';
 
 const NUMPERPAGE = 50;
 
@@ -20,11 +21,11 @@ export class DatabaseService {
         this._pool = createPool(poolconfig);
     }
 
-    query(q: string, params?: any[]): Observable<any> {
+    query<T>(q: string, params?: any[]): Observable<T & DBResponse> {
         return this.getConnection()
         .pipe(
             switchMap(
-                conn => this.connectionQuery(conn, q, params).pipe(
+                conn => this.connectionQuery<T>(conn, q, params).pipe(
                     catchError(err => {
                         conn.release();
                         return throwError(err);
@@ -50,7 +51,7 @@ export class DatabaseService {
         });
     }
 
-    connectionQuery(conn: Connection, query: string, params?: any[]): Observable<any> {
+    connectionQuery<T>(conn: Connection, query: string, params?: any[]): Observable<T & DBResponse> {
         return Observable.create(observer => {
             conn.query(query, params || [], (error, result) => {
                 if (error) {
@@ -62,17 +63,13 @@ export class DatabaseService {
         });
     }
 
-    beginTransaction(conn: Connection): Observable<Connection> {
-        return Observable.create(obs => {
-            conn.beginTransaction((err) => {
-                if (err) {
-                    return obs.error(err);
-                }
-                obs.next(conn);
-                return obs.complete(conn);
-            });
-        });
+    beginTransaction(conn?: Connection): Observable<Connection> {
+        const connSource = conn ? of(conn) : this.getConnection();
+        return connSource.pipe(
+            switchMap(connection => this._beginTransaction(connection))
+        );
     }
+    
 
     connectionCommit(conn: Connection): Observable<Connection> {
         return Observable.create(obs => {
@@ -102,5 +99,17 @@ export class DatabaseService {
     generatePageQuery(pageNum: number) {
         // We want to get the 1 more than page length, and hide it locally to decide if there is a next page
         return ` LIMIT ${Math.max(pageNum - 1, 0) * NUMPERPAGE}, ${NUMPERPAGE + 1}`;
+    }
+
+    private _beginTransaction(conn: Connection): Observable<Connection> {
+        return Observable.create(obs => {
+            conn.beginTransaction((err) => {
+                if (err) {
+                    return obs.error(err);
+                }
+                obs.next(conn);
+                return obs.complete(conn);
+            });
+        });
     }
 }

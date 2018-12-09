@@ -2,6 +2,7 @@ import {DatabaseService} from '../services/db';
 import {SessionManager} from '../services/session';
 import {LoggingService} from '../services/logger';
 import {WorkspaceService} from '../services/workspace';
+import {ExperimentService} from '../services/experiment';
 
 export interface Config {
     environment: string;
@@ -14,5 +15,6 @@ export interface Config {
     db?: DatabaseService,
     sessionManager?: SessionManager,
     workspaceService?: WorkspaceService,
-    logger?: LoggingService
+    experimentService?: ExperimentService,
+    logger?: LoggingService,
 }

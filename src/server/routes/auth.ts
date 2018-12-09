@@ -4,6 +4,7 @@ import {throwError} from 'rxjs';
 import {switchMap, map} from 'rxjs/operators';
 import {Config} from '../models/config';
 import {AuthService} from '../services/auth';
+import {User} from '../models/auth';
 
 const COOKIE_OPTIONS = {
     path: '/',
@@ -28,7 +29,7 @@ module.exports = (APP_CONFIG: Config) => {
             authService.hashPassword(`${salt}|${body.Password}`)
             .pipe(
                 map(result => result.hash),
-                switchMap(hash => db.query('Insert into `users` (`Email`, `Salt`, `PassHash`, `Active`) VALUES(?, ?, ?, 1);', [body.Email, salt, hash])),
+                switchMap(hash => db.query<void>('Insert into `users` (`Email`, `Salt`, `PassHash`, `Active`) VALUES(?, ?, ?, 1);', [body.Email, salt, hash])),
                 // catchError(detect 400 or 500 here)
                 switchMap(result => {
                     const userId = result.insertId;
@@ -54,10 +55,10 @@ module.exports = (APP_CONFIG: Config) => {
         if (!body || !body.Email || !body.Password) {
             return res.status(400).send('Email and Password are required fields');
         } else {
-            db.query('Select `PassHash`, `UserId`, `Salt` from `users` where `Active`=1 AND `Email`=? LIMIT 1;', [body.Email])
+            db.query<User[]>('Select `PassHash`, `UserId`, `Salt` from `users` where `Active`=1 AND `Email`=? LIMIT 1;', [body.Email])
             .pipe(
-                map((users: any[]) => {
-                    let user = {UserId: -100, Email: 'fakeUser', PassHash: '12345', Salt: '12345', Active: true}; // use a fake user which will fail to avoid timing differences indicating existence of real users.
+                map((users: User[]) => {
+                    let user: User = {UserId: -100, Email: 'fakeUser', PassHash: '12345', Salt: '12345', Active: true}; // use a fake user which will fail to avoid timing differences indicating existence of real users.
                     if (users.length > 0) {
                         user = users[0]
                     }

@@ -11,7 +11,8 @@ export interface SessionInfo {
     Expires: number;
     UserAgent?: string;
     Created?: Date;
-    LastAccessed?: Date;
+    LastUsed?: number; // unix timestamp from db
+    LastAccess?: Date; // Date for use in model
 }
 
 export interface User {
@@ -20,5 +21,6 @@ export interface User {
     PassHash?: string;
     Salt?: string
     Confirm?: string;
-    Active: boolean | 0 | 1;
+    Role?: 'Member' | 'Admin';
+    Active?: boolean | 0 | 1;
 }
