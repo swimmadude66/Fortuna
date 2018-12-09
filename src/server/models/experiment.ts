@@ -2,9 +2,13 @@ export interface Experiment {
     ExperimentId: number;
     WorkspaceId: number;
     Name: string;
+    Endpoint: string;
     Description?: string;
+    APIKeyHash?: string; // Only present when fetched from db
+    APIKey?: string; // Only present on the initial setting
     Outcomes?: ExperimentOutcome[];
     Results?: ExperimentResult[];
+    Active?: boolean;
 }
 
 export interface ExperimentSubject {

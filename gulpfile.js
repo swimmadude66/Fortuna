@@ -8,8 +8,7 @@ var server_proc;
 
 gulp.task('compile-node', function() {
 	return gulp.src('./src/server/**/*.ts')
-    .pipe(ts_project()).js
-    .on('error', function() { /* Ignore compiler errors */})
+    .pipe(ts_project().on('error', function() { /* Ignore compiler errors */}))
 	.pipe(gulp.dest('dist/server/'));
 });
 

@@ -2,9 +2,16 @@ import {tap} from 'rxjs/operators';
 import {Router} from 'express';
 import {Config} from '../models/config';
 
+const COOKIE_OPTIONS = {
+    path: '/',
+    httpOnly: true,
+    signed: true,
+    sameSite: true,
+};
+
 module.exports = (APP_CONFIG: Config) => {
     const router = Router();
-    const db = APP_CONFIG.db;
+    const logger = APP_CONFIG.logger;
     const sessionManager = APP_CONFIG.sessionManager;
 
     router.use((req, res, next) => {
@@ -21,19 +28,21 @@ module.exports = (APP_CONFIG: Config) => {
             tap(result => {
                 if (result && result.SessionKey) {
                     sessionManager.updateAccess(result.SessionKey)
-                    .subscribe(_ => _, err=> console.error(err));
+                    .subscribe(_ => _, err=> logger.logError(err));
                 }
             })
         )
         .subscribe(
             result => {
                 if (!result) {
+                    res.locals.usersession = null;
+                    res.clearCookie(APP_CONFIG.cookie_name, {...COOKIE_OPTIONS, secure: req.secure});
                     return next();
                 }
                 res.locals.usersession = result;
                 return next();
             }, err => {
-                console.error(err);
+                logger.logError(err);
                 return next();
             }
         );
@@ -50,6 +59,8 @@ module.exports = (APP_CONFIG: Config) => {
             return next();
         }
     });
+
+    router.use('/experiments', require('./experiments')(APP_CONFIG));
 
     // PRIVATE ROUTES GO BELOW HERE
 

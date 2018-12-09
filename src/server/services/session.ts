@@ -2,7 +2,7 @@ import {Observable} from 'rxjs';
 import {map} from 'rxjs/operators';
 import * as uuid from 'uuid/v4';
 import {DatabaseService} from './db';
-import {UserSession, SessionInfo} from '../models/auth';
+import {UserSession, SessionInfo, User} from '../models/auth';
 
 const EXPIRATION_SECONDS = (30 * 24 * 60 * 60); // 30 day expiration for now
 
@@ -33,14 +33,14 @@ export class SessionManager {
         );
     }
 
-    createSession(userId: number, userAgent?: string): Observable<{SessionKey: string, Expires: number}> {
+    createSession(user: User, userAgent?: string): Observable<UserSession> {
         const sessionId = uuid().replace(/\-/ig, '');
         const now = Math.floor(new Date().valueOf()/1000);
         const expires = now + EXPIRATION_SECONDS; // 30 day expiration for now
         const q = 'Insert into `sessions` (`SessionKey`, `UserId`, `Expires`, `UserAgent`, `LastUsed`) VALUES (?, ?, ?, ?, ?);';
-        return this._db.query<void>(q, [sessionId, userId, expires, userAgent, now])
+        return this._db.query<void>(q, [sessionId, user.UserId, expires, userAgent, now])
         .pipe(
-            map(_ => ({SessionKey: sessionId, Expires: expires}))
+            map(_ => ({UserId: user.UserId, Email: user.Email, SessionKey: sessionId, Expires: expires}))
         );
     }
 

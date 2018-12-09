@@ -21,7 +21,7 @@ export class DatabaseService {
         this._pool = createPool(poolconfig);
     }
 
-    query<T>(q: string, params?: any[]): Observable<T & DBResponse> {
+    query<T>(q: string, params?: any[]): Observable<DBResponse<T>> {
         return this.getConnection()
         .pipe(
             switchMap(
@@ -51,7 +51,7 @@ export class DatabaseService {
         });
     }
 
-    connectionQuery<T>(conn: Connection, query: string, params?: any[]): Observable<T & DBResponse> {
+    connectionQuery<T>(conn: Connection, query: string, params?: any[]): Observable<DBResponse<T>> {
         return Observable.create(observer => {
             conn.query(query, params || [], (error, result) => {
                 if (error) {

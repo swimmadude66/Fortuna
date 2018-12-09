@@ -22,5 +22,6 @@ export interface User {
     Salt?: string
     Confirm?: string;
     Role?: 'Member' | 'Admin';
+    WorkspaceIds?: number[];
     Active?: boolean | 0 | 1;
 }

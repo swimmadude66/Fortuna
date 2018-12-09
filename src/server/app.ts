@@ -17,6 +17,7 @@ import {SessionManager} from './services/session';
 import {LoggingService} from './services/logger';
 import {WorkspaceService} from './services/workspace';
 import {ExperimentService} from './services/experiment';
+import {AuthService} from './services/auth';
 
 // Helpers //
 
@@ -104,12 +105,14 @@ if (cluster.isMaster) {
     /*-------- Services --------*/
     const loggingService = new LoggingService();
     const db = new DatabaseService();
+    const authService = new AuthService(db);
     const sessionManager = new SessionManager(db);
     const workspaceService = new WorkspaceService(db);
-    const experimentService = new ExperimentService(db);
+    const experimentService = new ExperimentService(db, authService);
 
     APP_CONFIG.logger = loggingService;
     APP_CONFIG.db = db,
+    APP_CONFIG.authService = authService;
     APP_CONFIG.sessionManager = sessionManager;
     APP_CONFIG.workspaceService = workspaceService;
     APP_CONFIG.experimentService = experimentService

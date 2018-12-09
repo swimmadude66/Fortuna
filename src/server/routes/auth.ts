@@ -1,6 +1,4 @@
 import {Router} from 'express';
-import * as uuid from 'uuid/v4';
-import {throwError} from 'rxjs';
 import {switchMap, map} from 'rxjs/operators';
 import {Config} from '../models/config';
 import {AuthService} from '../services/auth';
@@ -15,9 +13,9 @@ const COOKIE_OPTIONS = {
 
 module.exports = (APP_CONFIG: Config) => {
     const router = Router();
-    const db = APP_CONFIG.db;
+    const logger = APP_CONFIG.logger;
     const sessionManager = APP_CONFIG.sessionManager;
-    const authService = new AuthService();
+    const authService = APP_CONFIG.authService;
     const workspaceService = APP_CONFIG.workspaceService;
 
     router.post('/signup', (req, res) => {
@@ -25,25 +23,31 @@ module.exports = (APP_CONFIG: Config) => {
         if (!body || !body.Email || !body.Password) {
             return res.status(400).send('Email and Password are required fields');
         } else {
-            const salt = uuid().replace(/-/ig, '');
-            authService.hashPassword(`${salt}|${body.Password}`)
+            authService.signup(body.Email, body.Password)
             .pipe(
-                map(result => result.hash),
-                switchMap(hash => db.query<void>('Insert into `users` (`Email`, `Salt`, `PassHash`, `Active`) VALUES(?, ?, ?, 1);', [body.Email, salt, hash])),
-                // catchError(detect 400 or 500 here)
-                switchMap(result => {
-                    const userId = result.insertId;
-                    return workspaceService.createWorkspace(result.insertId, 'Personal Workspace').pipe(map(_ => userId));
+                switchMap(user => sessionManager.createSession(user, JSON.stringify(res.useragent))),
+                map(userSession => {
+                    res.cookie(APP_CONFIG.cookie_name, userSession.SessionKey, {...COOKIE_OPTIONS, expires: new Date(userSession.Expires * 1000), secure: req.secure});
+                    return userSession;
                 }),
-                switchMap(userId => sessionManager.createSession(userId, JSON.stringify(res.useragent)))
+                switchMap(userSession => workspaceService.createWorkspace(userSession.UserId, body.Email, true)
+                .pipe(
+                    map(workspace => {
+                        const user: User = {
+                            UserId: userSession.UserId,
+                            Email: userSession.Email,
+                            WorkspaceIds: [workspace.WorkspaceId]
+                        };
+                        return user;
+                    })
+                ))
             )
             .subscribe(
-                result => {
-                    res.cookie(APP_CONFIG.cookie_name, result.SessionKey, {...COOKIE_OPTIONS, expires: new Date(result.Expires * 1000), secure: req.secure});
-                    return res.status(204).send();
+                user => {
+                    return res.status(200).send(user);
                 },
                 err => {
-                    console.error(err);
+                    logger.logError(err);
                     res.status(400).send('Could not complete signup');
                 }
             );
@@ -55,36 +59,29 @@ module.exports = (APP_CONFIG: Config) => {
         if (!body || !body.Email || !body.Password) {
             return res.status(400).send('Email and Password are required fields');
         } else {
-            db.query<User[]>('Select `PassHash`, `UserId`, `Salt` from `users` where `Active`=1 AND `Email`=? LIMIT 1;', [body.Email])
+            authService.login(body.Email, body.Password)
             .pipe(
-                map((users: User[]) => {
-                    let user: User = {UserId: -100, Email: 'fakeUser', PassHash: '12345', Salt: '12345', Active: true}; // use a fake user which will fail to avoid timing differences indicating existence of real users.
-                    if (users.length > 0) {
-                        user = users[0]
-                    }
-                    return user;
-                }),
-                switchMap(user => authService.validatePassword(user, body.Password)
-                    .pipe(
-                        switchMap(isValid => {
-                            if (isValid) {
-                                return sessionManager.createSession(user.UserId, JSON.stringify(res.useragent));
-                            } else {
-                                return throwError('Incorrect username or password');
-                            }
-                        })
-                    )
-                )
-            ).subscribe(
+                switchMap(user => sessionManager.createSession(user, JSON.stringify(res.useragent)).pipe(
+                    map(userSession => {
+                        res.cookie(APP_CONFIG.cookie_name, userSession.SessionKey, {...COOKIE_OPTIONS, expires: new Date(userSession.Expires * 1000), secure: req.secure});
+                        const cleanUser: User = {
+                            UserId: user.UserId,
+                            Email: user.Email,
+                            WorkspaceIds: user.WorkspaceIds
+                        };
+                        return cleanUser;
+                    })
+                ))
+            )
+            .subscribe(
                 result => {
-                    res.cookie(APP_CONFIG.cookie_name, result.SessionKey, {...COOKIE_OPTIONS, expires: new Date(result.Expires * 1000), secure: req.secure});
-                    return res.send();
+                    return res.send(result);
                 },
                 err => {
                     if (err === 'Incorrect username or password') {
                         return res.status(400).send('Incorrect username or password');
                     } else {
-                        console.error(err);
+                        logger.logError(err);
                         return res.status(500).send('Could not login at this time');
                     }
                 }
@@ -104,7 +101,7 @@ module.exports = (APP_CONFIG: Config) => {
         .subscribe(
             sessions => res.send(sessions),
             err => {
-                console.error(err);
+                logger.logError(err);
                 res.status(500).send('Cannot fetch active sessions');
             }
         )
@@ -136,7 +133,7 @@ module.exports = (APP_CONFIG: Config) => {
             .subscribe(
                 _ => res.send(true),
                 err => {
-                    console.error(err);
+                    logger.logError(err);
                     res.send(true);
                 }
             );

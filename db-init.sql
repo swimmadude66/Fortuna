@@ -51,10 +51,13 @@ CREATE TABLE IF NOT EXISTS `workspace_users` (
 
 CREATE TABLE IF NOT EXISTS `experiments` (
   `ExperimentId` int(11) NOT NULL AUTO_INCREMENT,
-  `WorkspaceId` int(11) DEFAULT NULL,
+  `WorkspaceId` int(11) NOT NULL,
   `Name` varchar(45) NOT NULL,
   `Description` text,
   `Active` tinyint(1) NOT NULL DEFAULT '1',
+  `Endpoint` varchar(64) NOT NULL,
+  `APIKeyHash` varchar(128) NOT NULL,
+  `APIKeySalt` varchar(64) NOT NULL,
   PRIMARY KEY (`ExperimentId`),
   KEY `ExperimentWorkspace_idx` (`WorkspaceId`),
   CONSTRAINT `ExperimentWorkspace` FOREIGN KEY (`WorkspaceId`) REFERENCES `workspaces` (`WorkspaceId`) ON DELETE NO ACTION ON UPDATE NO ACTION
