@@ -15,6 +15,7 @@ import {Config} from './models/config';
 import {DatabaseService} from './services/db';
 import {SessionManager} from './services/session';
 import {LoggingService} from './services/logger';
+import {WorkspaceService} from './services/workspace';
 
 // Helpers //
 
@@ -100,13 +101,15 @@ if (cluster.isMaster) {
 } else {
 
     /*-------- Services --------*/
+    const loggingService = new LoggingService();
     const db = new DatabaseService();
     const sessionManager = new SessionManager(db);
-    const loggingService = new LoggingService();
+    const workspaceService = new WorkspaceService(db);
 
     APP_CONFIG.logger = loggingService;
     APP_CONFIG.db = db,
     APP_CONFIG.sessionManager = sessionManager;
+    APP_CONFIG.workspaceService = workspaceService;
 
     const app = express();
     app.use(compress());

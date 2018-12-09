@@ -1,8 +1,7 @@
 import {Router} from 'express';
-import {createHash} from 'crypto';
 import * as uuid from 'uuid/v4';
-import {Observable, throwError} from 'rxjs';
-import {flatMap, switchMap, map} from 'rxjs/operators';
+import {throwError} from 'rxjs';
+import {switchMap, map} from 'rxjs/operators';
 import {Config} from '../models/config';
 import {AuthService} from '../services/auth';
 
@@ -18,6 +17,7 @@ module.exports = (APP_CONFIG: Config) => {
     const db = APP_CONFIG.db;
     const sessionManager = APP_CONFIG.sessionManager;
     const authService = new AuthService();
+    const workspaceService = APP_CONFIG.workspaceService;
 
     router.post('/signup', (req, res) => {
         const body = req.body;
@@ -30,7 +30,11 @@ module.exports = (APP_CONFIG: Config) => {
                 map(result => result.hash),
                 switchMap(hash => db.query('Insert into `users` (`Email`, `Salt`, `PassHash`, `Active`) VALUES(?, ?, ?, 1);', [body.Email, salt, hash])),
                 // catchError(detect 400 or 500 here)
-                switchMap(result => sessionManager.createSession(result.insertId, JSON.stringify(res.useragent)))
+                switchMap(result => {
+                    const userId = result.insertId;
+                    return workspaceService.createWorkspace(result.insertId, 'Personal Workspace').pipe(map(_ => userId));
+                }),
+                switchMap(userId => sessionManager.createSession(userId, JSON.stringify(res.useragent)))
             )
             .subscribe(
                 result => {
